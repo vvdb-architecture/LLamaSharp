@@ -37,7 +37,12 @@ namespace LLama.Native
         /// <summary>
         /// Get the number of maximum sequences allowed
         /// </summary>
-        public uint MaxSeq => NativeApi.llama_n_seq_max(this);
+        public uint MaxSeq => llama_n_seq_max(this);
+
+        /// <summary>
+        /// Get the number of recurrent-state snapshots per seq for rollback
+        /// </summary>
+        public uint RecurrentRollbackSnapshots => llama_n_rs_seq(this);
 
         /// <summary>
         /// Get or set the number of threads used for generation of a single token.
@@ -344,7 +349,7 @@ namespace LLama.Native
         private static extern void llama_synchronize(SafeLLamaContextHandle ctx);
 
         [DllImport(NativeApi.libraryName, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int llama_set_adapter_lora(SafeLLamaContextHandle context, IntPtr adapter, float scale);
+        private static extern unsafe int llama_set_adapters_lora(SafeLLamaContextHandle context, IntPtr* adapters, nuint nAdapters, float* scales);
 
         /// <summary>
         /// Get metadata value as a string by key name
@@ -355,6 +360,7 @@ namespace LLama.Native
         /// <param name="buf_size"></param>
         /// <returns>The length of the value string (on success) -1 otherwise </returns>
         [DllImport(NativeApi.libraryName, CallingConvention = CallingConvention.Cdecl)]
+        // ReSharper disable once InconsistentNaming
         private static extern int llama_adapter_meta_val_str(IntPtr adapter, string key, StringBuilder buf, UIntPtr buf_size);
         
         /// <summary>
@@ -374,6 +380,7 @@ namespace LLama.Native
         /// <param name="buf_size"></param>
         /// <returns>The length of string i.e meta key (on success) -1 otherwise</returns>
         [DllImport(NativeApi.libraryName, CallingConvention = CallingConvention.Cdecl)]
+        // ReSharper disable once InconsistentNaming
         private static extern int llama_adapter_meta_key_by_index(IntPtr adapter, int i, StringBuilder buf, UIntPtr buf_size);
         
         /// <summary>
@@ -385,13 +392,8 @@ namespace LLama.Native
         /// <param name="buf_size"></param>
         /// <returns>The length of value string (on success) -1 otherwise</returns>
         [DllImport(NativeApi.libraryName, CallingConvention = CallingConvention.Cdecl)]
+        // ReSharper disable once InconsistentNaming
         private static extern int llama_adapter_meta_val_by_index(IntPtr adapter, int i, StringBuilder buf,  UIntPtr buf_size);
-
-        [DllImport(NativeApi.libraryName, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int llama_rm_adapter_lora(SafeLLamaContextHandle context, IntPtr adapter);
-
-        [DllImport(NativeApi.libraryName, CallingConvention = CallingConvention.Cdecl)]
-        private static extern int llama_clear_adapter_lora(SafeLLamaContextHandle context);
 
         /// <summary>
         /// Get the pooling type for this context
@@ -430,48 +432,106 @@ namespace LLama.Native
         /// <param name="warmup"></param>
         [DllImport(NativeApi.libraryName, CallingConvention = CallingConvention.Cdecl)]
         private static extern void llama_set_warmup(SafeLLamaContextHandle ctx, [MarshalAs(UnmanagedType.U1)] bool warmup);
+
+        /// <summary>
+        /// Set whether to use causal attention or not. If set to true, the model will only attend to the past tokens
+        /// </summary>
+        [DllImport(NativeApi.libraryName, CallingConvention = CallingConvention.Cdecl)]
+        private static extern void llama_set_causal_attn(SafeLLamaContextHandle ctx, [MarshalAs(UnmanagedType.U1)] bool causalAttn);
+
+        /// <summary>
+        /// Set whether the context outputs embeddings or not
+        /// </summary>
+        /// <param name="ctx"></param>
+        /// <param name="embeddings">If true, embeddings will be returned but logits will not</param>
+        [DllImport(NativeApi.libraryName, CallingConvention = CallingConvention.Cdecl)]
+        private static extern void llama_set_embeddings(SafeLLamaContextHandle ctx, [MarshalAs(UnmanagedType.U1)] bool embeddings);
+
+        /// <summary>
+        /// Get the n_seq_max for this context
+        /// </summary>
+        /// <param name="ctx"></param>
+        /// <returns></returns>
+        [DllImport(NativeApi.libraryName, CallingConvention = CallingConvention.Cdecl)]
+        private static extern uint llama_n_seq_max(SafeLLamaContextHandle ctx);
+
+        /// <summary>
+        /// Get the n_rs_seq for this context
+        /// </summary>
+        /// <param name="ctx"></param>
+        /// <returns></returns>
+        [DllImport(NativeApi.libraryName, CallingConvention = CallingConvention.Cdecl)]
+        private static extern uint llama_n_rs_seq(SafeLLamaContextHandle ctx);
+        #endregion
+
+        #region Setters
+        /// <summary>
+        /// Set whether the model is in warmup mode or not
+        /// If true, all model tensors are activated during <see cref="Decode(LLamaBatch)"/> to load and cache their weights.
+        /// </summary>
+        public void SetWarmup(bool value)
+        {
+            llama_set_warmup(this, value);
+        }
+
+        /// <summary>
+        /// Set whether to use causal attention or not. If set to true, the model will only attend to the past tokens
+        /// </summary>
+        public void SetCausalAttention(bool value)
+        {
+            llama_set_causal_attn(this, value);
+        }
+
+        /// <summary>
+        /// Set whether the context outputs embeddings or not
+        /// </summary>
+        /// <param name="value">If true, embeddings will be returned but logits will not</param>
+        public void SetEmbeddings(bool value)
+        {
+            llama_set_embeddings(this, value);
+        }
         #endregion
 
         #region LoRA
         /// <summary>
-        /// Add a LoRA adapter to this context
+        /// Set the LoRa adapters on the context
         /// </summary>
-        /// <param name="lora"></param>
-        /// <param name="scale"></param>
+        /// <param name="adapters"></param>
         /// <exception cref="ArgumentException"></exception>
-        /// <exception cref="RuntimeError"></exception>
-        public void AddLoraAdapter(LoraAdapter lora, float scale)
+        public void SetLoraAdapters(params Span<(LoraAdapter Adapter, float Scale)> adapters)
         {
-            if (lora.Model != ModelHandle)
-                throw new ArgumentException("Cannot add LoRA adapter which was loaded for a different model");
-            if (!lora.Loaded)
-                throw new ArgumentException("Cannot add LoRA adapter which has been unloaded");
+            // Check adapters are all valid and attached to this model
+            foreach (var adapter in adapters)
+            {
+                if (adapter.Adapter.Model != ModelHandle)
+                    throw new ArgumentException("Cannot add LoRA adapter which was loaded for a different model");
+                if (!adapter.Adapter.Loaded)
+                    throw new ArgumentException("Cannot add LoRA adapter which has been unloaded");
+            }
 
-            var err = llama_set_adapter_lora(this, lora.Pointer, scale);
-            if (err != 0)
-                throw new RuntimeError("Failed to set lora adapter");
-        }
+            // Copy data into buffers
+            Span<IntPtr> adapterPtrs = stackalloc IntPtr[adapters.Length];
+            Span<float> scales = stackalloc float[adapters.Length];
+            for (var i = 0; i < adapters.Length; i++)
+            {
+                adapterPtrs[i] = adapters[i].Adapter.Pointer;
+                scales[i] = adapters[i].Scale;
+            }
 
-        /// <summary>
-        /// Remove a LoRA adapter from this context
-        /// </summary>
-        /// <param name="lora"></param>
-        /// <returns>Indicates if the lora was in this context and was remove</returns>
-        public bool RemoveLoraAdapter(LoraAdapter lora)
-        {
-            if (lora.Model != ModelHandle)
-                return false;
-
-            var err = llama_rm_adapter_lora(this, lora.Pointer);
-            return err == 0;
-        }
-
-        /// <summary>
-        /// Remove all LoRA adapters from this context
-        /// </summary>
-        public void ClearLoraAdapters()
-        {
-            llama_clear_adapter_lora(this);
+            // Set adapters
+            unsafe
+            {
+                fixed (IntPtr* adapterPtrsPtr = adapterPtrs)
+                fixed (float* scalesPtr = scales)
+                {
+                    llama_set_adapters_lora(
+                        this,
+                        adapterPtrsPtr,
+                        (nuint)adapters.Length,
+                        scalesPtr
+                    );
+                }
+            }
         }
         #endregion
 
@@ -567,6 +627,7 @@ namespace LLama.Native
         /// <param name="special">Allow tokenizing special and/or control tokens which otherwise are not exposed and treated as plaintext.</param>
         /// <returns></returns>
         /// <exception cref="RuntimeError"></exception>
+        // ReSharper disable once InconsistentNaming
         public LLamaToken[] Tokenize(string text, bool add_bos, bool special, Encoding encoding)
         {
             return ThrowIfDisposed().Tokenize(text, add_bos, special, encoding);
@@ -664,9 +725,11 @@ namespace LLama.Native
             var batchSize = checked((int)BatchSize);
 
             // Evaluate the prompt, in chunks smaller than the max batch size
+            // ReSharper disable once InconsistentNaming
             var n_left = tokens.Count;
             for (var i = 0; i < tokens.Count; i += batchSize)
             {
+                // ReSharper disable once InconsistentNaming
                 var n_eval = tokens.Count - i;
                 if (n_eval > batchSize)
                     n_eval = batchSize;

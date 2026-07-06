@@ -14,8 +14,56 @@ namespace LLama.Batched;
 public sealed class BatchedExecutor
     : IDisposable
 {
-    private int _nextSequenceId;
+    /// <summary>
+    /// Tracks the sequence IDs currently in use by active conversations.
+    /// This pool ensures that IDs are reused and never exceed the native backend's SeqMax allocation.
+    /// </summary>
+    private readonly HashSet<int> _activeSequenceIds = new();
+
+    /// <summary>
+    /// Allocates the lowest available Sequence ID for a new conversation.
+    /// </summary>
+    /// <returns>A unique sequence ID bounded by the maximum number of concurrent active conversations.</returns>
+    /// <exception cref="InvalidOperationException">Thrown if no sequence IDs can be allocated.</exception>
+    internal LLamaSeqId GetNextSequenceId()
+    {
+        // LOCK REQUIRED: Prevent race conditions if multiple conversations are created simultaneously
+        lock (_activeSequenceIds)
+        {
+            // Linearly search for the lowest available ID.
+            // Because IDs are recycled when conversations are disposed, this will naturally 
+            // stay bounded below the host's maximum concurrency limit (SeqMax).
+            for (int i = 0; i < int.MaxValue; i++)
+            {
+                if (!_activeSequenceIds.Contains(i))
+                {
+                    _activeSequenceIds.Add(i);
+                    return (LLamaSeqId)i;
+                }
+            }
+        }
+
+        // Fallback safety (practically unreachable unless int.MaxValue concurrent users are active)
+        throw new InvalidOperationException("Failed to allocate a Sequence ID.");
+    }
+
+    /// <summary>
+    /// Returns a Sequence ID to the pool so it can be reused by future conversations.
+    /// This should be called exactly once when a Conversation is being disposed.
+    /// </summary>
+    /// <param name="id">The sequence ID to release.</param>
+    internal void ReleaseSequenceId(LLamaSeqId id)
+    {
+        // LOCK REQUIRED: Prevent race conditions against GetNextSequenceId
+        lock (_activeSequenceIds)
+        {
+            // Remove the ID from the active set, making it available for the next GetNextSequenceId() call
+            _activeSequenceIds.Remove((int)id);
+        }
+    }
+
     private readonly List<IBatch> _batchQueue = [];
+    private string? _mtmdMarker;
     private int _batchQueueHead;
     private int _batchedTokenCount;
     private bool _batchedTokenCountDirty = true;
@@ -42,7 +90,12 @@ public sealed class BatchedExecutor
     /// The <see cref="LLamaWeights"/> this executor is using
     /// </summary>
     public LLamaWeights Model { get; }
-    
+
+    /// <summary>
+    /// The optional <see cref="MtmdWeights"/> this executor is using
+    /// </summary>
+    public MtmdWeights? ClipModel { get; }
+
     /// <summary>
     /// Get the number of tokens in the batch, waiting for <see cref="Infer"/> to be called
     /// </summary>
@@ -78,10 +131,12 @@ public sealed class BatchedExecutor
     /// </summary>
     /// <param name="model">The model to use</param>
     /// <param name="contextParams">Parameters to create a new context</param>
-    public BatchedExecutor(LLamaWeights model, IContextParams contextParams)
+    /// <param name="clipModel">Clip model to use for multimodal capabilities</param>
+    public BatchedExecutor(LLamaWeights model, IContextParams contextParams, MtmdWeights? clipModel = null)
     {
         Model = model;
         Context = model.CreateContext(contextParams);
+        ClipModel = clipModel;
         Epoch = 1;
     }
 
@@ -236,11 +291,6 @@ public sealed class BatchedExecutor
 
         Context.Dispose();
     }
-
-    internal LLamaSeqId GetNextSequenceId()
-    {
-        return checked((LLamaSeqId)_nextSequenceId++);
-    }
     
     /// <summary>
     /// Get a reference to a batch that tokens can be added to.
@@ -314,6 +364,23 @@ public sealed class BatchedExecutor
         return (end, Epoch + (uint)(_batchQueue.Count - _batchQueueHead) * 2);
     }
 
+    internal ulong QueueMtmdBatch(Conversation conversation, Conversation.MtmdChunkSequence sequence)
+    {
+        if (ClipModel is null)
+            throw new InvalidOperationException("This batched executor is not configured for multimodal inference.");
+
+        var batch = new MtmdChunkBatch(ClipModel, conversation, sequence);
+        _batchQueue.Add(batch);
+        return Epoch + (uint)_batchQueue.Count * 2;
+    }
+
+    internal string GetMtmdMarker()
+    {
+        if (ClipModel is null)
+            throw new InvalidOperationException("This batched executor is not configured for multimodal inference.");
+        return _mtmdMarker ??= NativeApi.MtmdDefaultMarker() ?? "<media>";
+    }
+
     #region batches
     private interface IBatch
     {
@@ -343,6 +410,45 @@ public sealed class BatchedExecutor
         public Task<DecodeResult> DecodeAsync(LLamaContext ctx, CancellationToken token)
         {
             return ctx.DecodeAsync(Batch, token);
+        }
+    }
+
+    private class MtmdChunkBatch : IBatch
+    {
+        private readonly MtmdWeights _clipModel;
+        private readonly Conversation _conversation;
+        private readonly Conversation.MtmdChunkSequence _sequence;
+
+        public MtmdChunkBatch(MtmdWeights clipModel, Conversation conversation, Conversation.MtmdChunkSequence sequence)
+        {
+            _clipModel = clipModel;
+            _conversation = conversation;
+            _sequence = sequence;
+        }
+
+        public int ItemCount => Math.Max(1, _sequence.TotalTokens);
+
+        public Task<DecodeResult> DecodeAsync(LLamaContext ctx, CancellationToken token)
+        {
+            try
+            {
+                var nPast = _conversation.GetMtmdPast();
+                var status = _clipModel.EvaluateChunks(_sequence.Chunks, ctx.NativeHandle, ref nPast,
+                    (int)_conversation.ConversationId, checked((int)ctx.BatchSize), logitsLast: true);
+                if (status != 0)
+                {
+                    _conversation.OnMtmdEvaluationFailed(status);
+                    return Task.FromResult(DecodeResult.DecodeFailed);
+                }
+
+                _conversation.OnMtmdEvaluationCompleted(nPast, _sequence);
+                return Task.FromResult(DecodeResult.Ok);
+            }
+            catch
+            {
+                _conversation.OnMtmdEvaluationFailed(-1);
+                return Task.FromResult(DecodeResult.DecodeFailed);
+            }
         }
     }
     #endregion

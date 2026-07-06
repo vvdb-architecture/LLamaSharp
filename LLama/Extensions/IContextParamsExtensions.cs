@@ -23,9 +23,11 @@ namespace LLama.Extensions
             result = LLamaContextParams.Default();
 
             result.n_ctx = @params.ContextSize ?? 0;
+            result.context_type = @params.ContextType;
             result.n_batch = @params.BatchSize;
             result.n_ubatch = @params.UBatchSize;
             result.n_seq_max = @params.SeqMax;
+            result.n_rs_seq = @params.RecurrentRollbackSnapshots;
             result.embeddings = @params.Embeddings;
             result.rope_freq_base = @params.RopeFrequencyBase ?? 0;
             result.rope_freq_scale = @params.RopeFrequencyScale ?? 0;
@@ -58,8 +60,7 @@ namespace LLama.Extensions
                 null => LLamaFlashAttentionType.LLAMA_FLASH_ATTENTION_TYPE_AUTO
             };
             result.kv_unified = true;
-            result.n_seq_max = (uint)Math.Min(Math.Max(10,result.n_ctx/8),256);
-
+            
             result.n_threads = Threads(@params.Threads);
             result.n_threads_batch = Threads(@params.BatchThreads);
 

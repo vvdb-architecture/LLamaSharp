@@ -20,6 +20,8 @@ namespace LLama.Web.Common
         /// <inheritdoc />
         public uint? ContextSize { get; set; }
 
+        LLamaContextType IContextParams.ContextType => LLamaContextType.Default;
+
         /// <inheritdoc />
         public int MainGpu { get; set; } = 0;
 
@@ -36,10 +38,16 @@ namespace LLama.Web.Common
         public uint SeqMax { get; set; }
 
         /// <inheritdoc />
+        public uint RecurrentRollbackSnapshots { get; set; } = 0;
+
+        /// <inheritdoc />
         public bool Embeddings { get; set; }
 
         /// <inheritdoc />
         public bool UseMemorymap { get; set; } = true;
+
+        /// <inheritdoc />
+        public bool UseDirectIO { get; }
 
         /// <inheritdoc />
         public bool UseMemoryLock { get; set; } = false;

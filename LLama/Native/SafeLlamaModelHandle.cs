@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Runtime.CompilerServices;
 using System.Text;
 using CommunityToolkit.HighPerformance.Buffers;
 using LLama.Exceptions;
@@ -176,7 +175,7 @@ namespace LLama.Native
         private static extern unsafe byte* llama_model_chat_template(SafeLlamaModelHandle model, string? name);
 
         /// <summary>
-        /// Load the model from a file
+        /// Load a model from a file
         /// If the file is split into multiple parts, the file name must follow this pattern: {name}-%05d-of-%05d.gguf
         /// If the split file name does not follow this pattern, use llama_model_load_from_splits
         /// </summary>
@@ -187,7 +186,7 @@ namespace LLama.Native
         private static extern SafeLlamaModelHandle llama_model_load_from_file(string path, LLamaModelParams @params);
 
         /// <summary>
-        /// Load the model from multiple splits (support custom naming scheme)
+        /// Load a model from multiple splits (support custom naming scheme)
         /// The paths must be in the correct order
         /// </summary>
         /// <returns></returns>
@@ -325,6 +324,12 @@ namespace LLama.Native
         [DllImport(NativeApi.libraryName, CallingConvention = CallingConvention.Cdecl)]
         private static extern int llama_model_n_embd(SafeLlamaModelHandle model);
 
+        [DllImport(NativeApi.libraryName, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int llama_model_n_embd_inp(SafeLlamaModelHandle model);
+
+        [DllImport(NativeApi.libraryName, CallingConvention = CallingConvention.Cdecl)]
+        private static extern int llama_model_n_embd_out(SafeLlamaModelHandle model);
+
         /// <summary>
         /// Get the number of layers in this model
         /// </summary>
@@ -455,7 +460,7 @@ namespace LLama.Native
         /// <param name="i"></param>
         /// <returns></returns>
         [DllImport(NativeApi.libraryName, CallingConvention = CallingConvention.Cdecl)]
-        private static extern string? llama_model_cls_label(SafeLlamaModelHandle model, uint i);
+        private static extern IntPtr /* char* */ llama_model_cls_label(SafeLlamaModelHandle model, uint i);
         #endregion
 
         #region LoRA
@@ -473,7 +478,7 @@ namespace LLama.Native
             // - File exists (automatically throws FileNotFoundException)
             // - File is readable (explicit check)
             // This provides better error messages that llama.cpp, which would throw an access violation exception in both cases.
-            using (var fs = new FileStream(path, FileMode.Open))
+            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read))
                 if (!fs.CanRead)
                     throw new InvalidOperationException($"LoRA file '{path}' is not readable");
 

@@ -41,6 +41,11 @@ namespace LLama.Native
         public uint n_seq_max;
 
         /// <summary>
+        /// number of recurrent-state snapshots per seq for rollback (0 = no rollback) [EXPERIMENTAL]
+        /// </summary>
+        public uint n_rs_seq;
+
+        /// <summary>
         /// number of threads to use for generation
         /// </summary>
         public int n_threads;
@@ -50,6 +55,11 @@ namespace LLama.Native
         /// </summary>
         public int n_threads_batch;
 
+        /// <summary>
+        /// Set the type of context (e.g. MTP)
+        /// </summary>
+        public LLamaContextType context_type;
+        
         /// <summary>
         /// RoPE scaling type, from `enum llama_rope_scaling_type` 
         /// </summary>
@@ -165,16 +175,6 @@ namespace LLama.Native
         private sbyte _offload_kqv;
 
         /// <summary>
-        /// whether to use flash attention. <b>EXPERIMENTAL</b>
-        /// </summary>
-        public bool flash_attention
-        {
-            readonly get => Convert.ToBoolean(_flash_attention);
-            set => _flash_attention = Convert.ToSByte(value);
-        }
-        private sbyte _flash_attention;
-
-        /// <summary>
         /// whether to measure performance timings
         /// </summary>
         public bool no_perf
@@ -220,6 +220,16 @@ namespace LLama.Native
         private sbyte _kv_unified;
 
         /// <summary>
+        /// backend sampler chain configuration (sampler chains must remain alive)
+        /// </summary>
+        public IntPtr samplers;
+
+        /// <summary>
+        /// number of sampler entries in <see cref="samplers"/>
+        /// </summary>
+        public nuint n_samplers;
+
+        /// <summary>
         /// Get the default LLamaContextParams
         /// </summary>
         /// <returns></returns>
@@ -232,4 +242,3 @@ namespace LLama.Native
         }
     }
 }
-

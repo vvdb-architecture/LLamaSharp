@@ -112,6 +112,25 @@
       </None>
 
 
+      <!-- Windows ARM64 -->
+      <None Include="$(MSBuildThisFileDirectory)runtimes/deps/win-arm64/llama.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Link>runtimes/win-arm64/native/llama.dll</Link>
+      </None>
+      <None Include="$(MSBuildThisFileDirectory)runtimes/deps/win-arm64/ggml.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Link>runtimes/win-arm64/native/ggml.dll</Link>
+      </None>
+      <None Include="$(MSBuildThisFileDirectory)runtimes/deps/win-arm64/ggml-base.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Link>runtimes/win-arm64/native/ggml-base.dll</Link>
+      </None>
+      <None Include="$(MSBuildThisFileDirectory)runtimes/deps/win-arm64/ggml-cpu.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Link>runtimes/win-arm64/native/ggml-cpu.dll</Link>
+      </None>
+
+
       <None Include="$(MSBuildThisFileDirectory)runtimes/deps/noavx/libllama.so">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         <Link>runtimes/linux-x64/native/noavx/libllama.so</Link>
@@ -339,11 +358,6 @@
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         <Link>runtimes/osx-arm64/native/libmtmd.dylib</Link>
       </None>
-      <None Include="$(MSBuildThisFileDirectory)runtimes/deps/osx-arm64/ggml-metal.metal">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Link>runtimes/osx-arm64/native/ggml-metal.metal</Link>
-      </None>
-
       <None Include="$(MSBuildThisFileDirectory)runtimes/deps/osx-x64/libggml-base.dylib">
           <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
           <Link>runtimes/osx-x64/native/libggml-base.dylib</Link>
@@ -396,19 +410,19 @@
 
       <None Include="$(MSBuildThisFileDirectory)runtimes/deps/noavx/mtmd.dll">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Link>runtimes/win-x64/native/noavx/libmtmd.dll</Link>
+        <Link>runtimes/win-x64/native/noavx/mtmd.dll</Link>
       </None>
       <None Include="$(MSBuildThisFileDirectory)runtimes/deps/avx/mtmd.dll">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Link>runtimes/win-x64/native/avx/libmtmd.dll</Link>
+        <Link>runtimes/win-x64/native/avx/mtmd.dll</Link>
       </None>
       <None Include="$(MSBuildThisFileDirectory)runtimes/deps/avx2/mtmd.dll">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Link>runtimes/win-x64/native/avx2/libmtmd.dll</Link>
+        <Link>runtimes/win-x64/native/avx2/mtmd.dll</Link>
       </None>
       <None Include="$(MSBuildThisFileDirectory)runtimes/deps/avx512/mtmd.dll">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Link>runtimes/win-x64/native/avx512/libmtmd.dll</Link>
+        <Link>runtimes/win-x64/native/avx512/mtmd.dll</Link>
       </None>
       <None Include="$(MSBuildThisFileDirectory)runtimes/deps/cu12.4.0/mtmd.dll">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -416,7 +430,11 @@
       </None>
       <None Include="$(MSBuildThisFileDirectory)runtimes/deps/vulkan/mtmd.dll">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        <Link>runtimes/win-x64/native/vulkan/libmtmd.dll</Link>
+        <Link>runtimes/win-x64/native/vulkan/mtmd.dll</Link>
+      </None>
+      <None Include="$(MSBuildThisFileDirectory)runtimes/deps/win-arm64/mtmd.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Link>runtimes/win-arm64/native/libmtmd.dll</Link>
       </None>
 
       <None Include="$(MSBuildThisFileDirectory)runtimes/deps/noavx/libmtmd.so">
